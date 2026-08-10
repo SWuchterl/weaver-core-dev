@@ -929,20 +929,31 @@ class ParticleTransformer(nn.Module):
             # fc
             output = self.fc(x_cls)
             if self.for_inference:
+                num_cls_for_testing = self.export_params.get('num_cls', output.size(1))
+                # print (f'output with length {output.size(1)} before softmax:\n', output)
+                print ("num_cls:", num_cls_for_testing)
+                print (f'output with length {output.size(1)} before softmax:\n')
+                # print the parts seperate
+                print (f'output_cls:\n', output.split([num_cls_for_testing, output.size(1) - num_cls_for_testing], dim=1)[0])
+                print (f'output_rest:\n', output.split([num_cls_for_testing, output.size(1) - num_cls_for_testing], dim=1)[1])
                 # softmax for the classification output logits
                 if self.export_params.get('apply_softmax', True):
                     num_cls = self.export_params.get('num_cls', output.size(1))
                     output_cls, output_rest = output.split([num_cls, output.size(1) - num_cls], dim=1)
                     output_cls = torch.softmax(output_cls, dim=1)
                     output = torch.cat([output_cls, output_rest], dim=-1)
+                    print (f'output with length {output.size(1)} after softmax:\n', output)
 
                 if self.export_params.get('concat_hid', False):
                     output = torch.cat([output, x_cls], dim=-1)
+                    print (f'output with length {output.size(1)} after concat:\n', output)
 
             # print('output:\n', output)
             if not self.return_embed:
+                print ('output without embed:\n', output)
                 return output
             else:
+                print ('output with embed:\n', output)
                 return output, x_cls
 
 
@@ -1114,6 +1125,7 @@ class ParticleTransformerTagger_ncoll(nn.Module):
         # v: (N, 4, P) [px,py,pz,energy]
         # mask: (N, 1, P) -- real particle = 1, padded = 0
 
+        print ('args len: %d, expected: %d' % (len(args), 3 * self.num_colls))
         assert len(args) == 3 * self.num_colls
 
         with torch.no_grad():

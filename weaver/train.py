@@ -16,6 +16,10 @@ from utils.logger import _logger, _configLogger
 from utils.dataset import SimpleIterDataset
 from utils.import_tools import import_module
 
+from sklearn.exceptions import UndefinedMetricWarning
+import warnings
+warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--train-mode', type=str, default='cls',
                     choices=['cls', 'regression', 'hybrid', 'custom'],
@@ -195,9 +199,11 @@ def to_filelist(args, mode='train'):
     if args.local_rank is not None:
         if mode == 'train' or mode == 'val':
             local_world_size = int(os.environ['LOCAL_WORLD_SIZE'])
+            print('Local world size: ', local_world_size)
             new_file_dict = {}
             for name, files in file_dict.items():
                 new_files = files[args.local_rank::local_world_size]
+                print ('Rank %d: %s files for %s: %d -> %d' % (args.local_rank, name, mode, len(files), len(new_files)))
                 assert(len(new_files) > 0)
                 np.random.shuffle(new_files)
                 new_file_dict[name] = new_files
@@ -205,7 +211,8 @@ def to_filelist(args, mode='train'):
 
     if args.copy_inputs:
         import tempfile
-        tmpdir = tempfile.mkdtemp()
+        # tmpdir = tempfile.mkdtemp()
+        tmpdir = tempfile.mkdtemp(dir = "/scratch/sewuchte/")
         if os.path.exists(tmpdir):
             shutil.rmtree(tmpdir)
         new_file_dict = {name: [] for name in file_dict}
@@ -366,7 +373,7 @@ def onnx(args, model, data_config, model_info):
                       input_names=model_info['input_names'],
                       output_names=model_info['output_names'],
                       dynamic_axes=model_info.get('dynamic_axes', None),
-                      opset_version=14) # 11 for 10_6, 14 for Run 3
+                      opset_version=14, verbose=True) # 11 for 10_6, 14 for Run 3
     _logger.info('ONNX model saved to %s', args.export_onnx)
 
     preprocessing_json = os.path.join(os.path.dirname(args.export_onnx), 'preprocess.json')
@@ -548,7 +555,8 @@ def optim(args, model, device):
                 def get_lr(epoch): return gamma ** max(0, epoch - milestones[0] + 1)  # noqa
                 scheduler = torch.optim.lr_scheduler.LambdaLR(
                     opt, (lambda _: 1, lambda _: 1, get_lr, get_lr),
-                    last_epoch=-1 if args.load_epoch is None else args.load_epoch, verbose=True)
+                    # last_epoch=-1 if args.load_epoch is None else args.load_epoch, verbose=True)
+                    last_epoch=-1 if args.load_epoch is None else args.load_epoch)
             else:
                 scheduler = torch.optim.lr_scheduler.MultiStepLR(
                     opt, milestones=milestones, gamma=gamma,
@@ -734,8 +742,20 @@ def model_setup(args, data_config):
                 assert len(unexpected_keys) == 0
                 _logger.info('Model initialized with weights from GloParT v3beta4p1\n ... Missing: %s\n ... Unexpected: %s' %
                         (missing_keys, unexpected_keys))
+            if args.load_model_weights == 'finetune_stage3beta4p1_scoutpretrainAK15.tillfc0':
+                # model_state = torch.load("./model/ak15_MD_incl_v10beta4_ul_manual2.nlayer10.vispart_as_resid.ddp4-bs640-lr1p2e-3.nepoch100.testrun/net_best_epoch_state.pt", map_location='cpu')
+                model_state = torch.load("./model/ak15_MD_incl_v10beta4_ul_manual.nlayer10.vispart_as_resid.ddp4-bs640-lr1p2e-3.nepoch100.runScoutPre2MoreDataLowPt_lastModel/net_epoch-99_state.pt", map_location='cpu')
+                # get model params except for the last fc.1 layer
+                model_state = {k: v for k, v in model_state.items() if not k.startswith('part.fc.1')}
+                missing_keys, unexpected_keys = model.load_state_dict(model_state, strict=False)
+                assert len(unexpected_keys) == 0
+                _logger.info('Model initialized with weights from GloParT v3beta4p1 AK15 \n ... Missing: %s\n ... Unexpected: %s' %
+                        (missing_keys, unexpected_keys))
+                print('Model initialized with weights from GloParT v3beta4p1 AK15 \n ... Missing: %s\n ... Unexpected: %s' %
+                        (missing_keys, unexpected_keys))
 
         else:
+            print(f'Loading model weights in default setup from {args.load_model_weights}')
             # this is the default setup
             if ':' in args.load_model_weights:
                 state_file, prefix = args.load_model_weights.split(':')
@@ -867,6 +887,7 @@ def model_setup(args, data_config):
     # save file implementation
     try:
         save_fn = network_module.get_save_fn(data_config, **network_options)
+        print ("save_fn:", save_fn)
         _logger.info('Using custom save function with options %s' % network_options)
     except AttributeError:
         save_fn = None
@@ -981,6 +1002,10 @@ def _main(args):
     training_mode = any(m in args.run_mode for m in ['train', 'val', 'train-only', 'val-only'])
 
     # device
+    if args.gpus == "\"\"":
+        print ("here")
+        args.gpus = None
+    print (args.gpus)
     if args.gpus:
         # distributed training
         if args.backend is not None:
@@ -1104,6 +1129,8 @@ def _main(args):
                         _logger.info('Waiting for model %s to be ready...' % (args.model_prefix + '_epoch-%d_state.pt' % epoch))
                         time.sleep(10)
                     time.sleep(10)
+                    print ('Loading model for validation: %s' % (args.model_prefix + '_epoch-%d_state.pt' % epoch))
+                    print (isinstance(model, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)))
                     if isinstance(model, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)):
                         model.module.load_state_dict(torch.load(args.model_prefix + '_epoch-%d_state.pt' % epoch, map_location=dev))
                     else:
@@ -1138,11 +1165,37 @@ def _main(args):
             
             if args.use_last_model:
                 if args.model_prefix and (args.backend is None or local_rank == 0):
+                    print ('Using last epoch model as best model...')
+                    print (args.model_prefix + '_epoch-%d_state.pt' % epoch)
                     shutil.copy2(args.model_prefix + '_epoch-%d_state.pt' %
                                 epoch, args.model_prefix + '_best_epoch_state.pt')
 
 
     if 'test' in args.run_mode or args.run_mode == ['test-only']:
+
+        if args.use_last_model:
+
+            # find the last epoch in the folder by checking all "_epoch-%d_state.pt" files and take the one with the largest epoch number
+            import re
+            import glob
+            epoch_files = glob.glob(args.model_prefix + '_epoch-*_state.pt')
+            epochs = []
+            for ef in epoch_files:
+                m = re.search(r'_epoch-(\d+)_state\.pt$', ef)
+                if m:
+                    epochs.append(int(m.group(1)))
+            if not epochs:
+                raise RuntimeError('No epoch files found in %s' % args.model_prefix)
+            epochMax = max(epochs)
+            print ('Found last epoch: %d' % epochMax)
+
+            if args.model_prefix and (args.backend is None or local_rank == 0):
+                print ('Using last epoch model as best model...')
+                print (args.model_prefix + '_epoch-%d_state.pt' % epochMax)
+                shutil.copy2(args.model_prefix + '_epoch-%d_state.pt' %
+                            epochMax, args.model_prefix + '_best_epoch_state.pt')
+
+
         if args.backend is not None and local_rank != 0:
             return
         if training_mode:

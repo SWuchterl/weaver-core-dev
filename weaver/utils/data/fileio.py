@@ -231,25 +231,25 @@ def _read_root(filepath, branches, load_range=None, treename=None):
         "filepath.endswith('20ifb.root') or re.search(r'mixed_ntuple/ntuples_\d*[05].root$', filepath)": {'file_no': 2},
     }
     '''
-    '''
+    
     # for training with v10
     specific_vars = {
         "not 'Spin0ToTT' in filepath and not 'DiH1OrHpm' in filepath and not 'TTtoLNu2Q_TuneCP5_13p6TeV' in filepath and not 'infer_UL17/BulkGravTo' in filepath": {'fj_gen_pid': 0, 'fj_gendau1_pid': 0},
     }
     specific_vars_included = {}
-    '''
+    
     # for CLIP's fine-tuning test
-    specific_vars = {
-        "'ggHH_kl_1_kt_1' in filepath": {'event_class': 0},
-        "'ggHH_kl_0_kt_1' in filepath": {'event_class': 1},
-        "'ggHH_kl_2p45_kt_1' in filepath": {'event_class': 2},
-        "'ggHH_kl_5_kt_1' in filepath": {'event_class': 3},
-        "'train_hyy4q_fixmassrat_0p2' in filepath": {'jet_label': 10000},
-        "'train_hyy4q_fixmassrat_0p4' in filepath": {'jet_label': 10001},
-        "'train_hyy4q_fixmassrat_0p6432' in filepath": {'jet_label': 10002},
-        "'train_hyy4q_fixmassrat_0p8' in filepath": {'jet_label': 10003},
-    }
-    specific_vars_included = {}
+    # specific_vars = {
+    #     "'ggHH_kl_1_kt_1' in filepath": {'event_class': 0},
+    #     "'ggHH_kl_0_kt_1' in filepath": {'event_class': 1},
+    #     "'ggHH_kl_2p45_kt_1' in filepath": {'event_class': 2},
+    #     "'ggHH_kl_5_kt_1' in filepath": {'event_class': 3},
+    #     "'train_hyy4q_fixmassrat_0p2' in filepath": {'jet_label': 10000},
+    #     "'train_hyy4q_fixmassrat_0p4' in filepath": {'jet_label': 10001},
+    #     "'train_hyy4q_fixmassrat_0p6432' in filepath": {'jet_label': 10002},
+    #     "'train_hyy4q_fixmassrat_0p8' in filepath": {'jet_label': 10003},
+    # }
+    # specific_vars_included = {}
     # specific_vars = {}
     # specific_vars_included = {}
 
@@ -347,7 +347,14 @@ def _read_files(filelist, branches, load_ranges=None, show_progressbar=False, **
             _logger.error(traceback.format_exc())
         if a is not None:
             table.append(a)
+    _logger.info(f'Finished reading {len(table)} out of {len(filelist)} files.')
+    # also print the file paths
+    _logger.info('Files read:')
+    for i_file, filepath in enumerate(filelist):
+        if i_file < len(table):
+            _logger.info(f'  {filepath}')
     table = _concat(table)  # ak.Array
+    _logger.info(f'Total entries loaded: {len(table)}')
     if len(table) == 0:
         raise RuntimeError(f'Zero entries loaded when reading files {filelist} with `load_ranges`={load_ranges}.')
     return table
@@ -383,7 +390,7 @@ def _read_files_concurrent(filelist, branches, load_ranges=None, show_progressba
             _logger.error(traceback.format_exc())
         return a
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
         futures = [executor.submit(_read_file, args) for args in args_list]
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
             table.append(future.result())

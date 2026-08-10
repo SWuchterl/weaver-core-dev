@@ -20,8 +20,10 @@ def _build_new_variables(table, funcs):
     if funcs is None:
         return table
     for k, expr in funcs.items():
+        # _logger.info(f'Building new variable: {k}')
         if k in table.fields:
             continue
+        # _logger.info(f'Evaluating expression: {expr}')
         table[k] = _eval_expr(expr, table)
     return table
 
@@ -106,10 +108,14 @@ class AutoStandardizer(object):
         _logger.debug('[AutoStandardizer] load_branches:\n  %s', ','.join(self.load_branches))
         table = _read_files(filelist, self.load_branches, self.load_range,
                             show_progressbar=True, treename=self._data_config.treename)
+        # _logger.info(f'[AutoStandardizer]: finished reading {len(table)} out of {len(filelist)} files.')
         table = _apply_selection(table, self._data_config.selection)
+        # _logger.info(f'[AutoStandardizer] Number of events after selection: {len(table)}')
         table = _build_new_variables(
             table, {k: v for k, v in self._data_config.var_funcs.items() if k in self.keep_branches})
+        # _logger.info(f'[AutoStandardizer] Number of events after building new variables: {len(table)}')
         table = _clean_up(table, self.load_branches - self.keep_branches)
+        # _logger.info(f'[AutoStandardizer] Number of events after cleaning up: {len(table)}')
         return table
 
     def make_preprocess_params(self, table):
@@ -174,10 +180,15 @@ class WeightMaker(object):
         _logger.debug('[WeightMaker] keep_branches:\n  %s', ','.join(self.keep_branches))
         _logger.debug('[WeightMaker] load_branches:\n  %s', ','.join(self.load_branches))
         table = _read_files(filelist, self.load_branches, show_progressbar=True, treename=self._data_config.treename)
+        # table = _read_files_concurrent(filelist, self.load_branches, show_progressbar=True, treename=self._data_config.treename)
+        # _logger.info(f'[WeightMaker]: finished reading {len(table)} out of {len(filelist)} files.')
         table = _apply_selection(table, self._data_config.selection)
+        # _logger.info(f'[WeightMaker] Number of events after selection: {len(table)}')
         table = _build_new_variables(
             table, {k: v for k, v in self._data_config.var_funcs.items() if k in self.keep_branches})
+        # _logger.info(f'[WeightMaker] Number of events after building new variables: {len(table)}')
         table = _clean_up(table, self.load_branches - self.keep_branches)
+        # _logger.info(f'[WeightMaker] Number of events after cleaning up: {len(table)}')
         return table
 
     def make_weights(self, table):
@@ -278,6 +289,7 @@ class WeightMaker(object):
 
     def produce(self, output=None):
         table = self.read_file(self._filelist)
+        # _logger.info(f'[WeightMaker-produce]: finished reading {len(table)} out of {len(self._filelist)} files.')
         ## for debugging ##
         # # write table:
         # import pickle
@@ -286,6 +298,7 @@ class WeightMaker(object):
         # with open('table.pkl', 'rb') as f:
         #     table = pickle.load(f)
         wgts = self.make_weights(table)
+        # _logger.info(f'[WeightMaker-produce]: finished making weights.')
         self._data_config.reweight_hists = wgts
         # must also propogate the changes to `data_config.options` so it can be persisted
         self._data_config.options['weights']['reweight_hists'] = {k: v.tolist() for k, v in wgts.items()}

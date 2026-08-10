@@ -142,6 +142,7 @@ class _SimpleIter(object):
             # split workload by files
             new_file_dict = {}
             for name, files in file_dict.items():
+                print (name, files, worker_info.id, worker_info.num_workers, len(files))
                 new_files = files[worker_info.id::worker_info.num_workers]
                 assert(len(new_files) > 0)
                 new_file_dict[name] = new_files

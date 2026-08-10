@@ -244,6 +244,8 @@ class DataConfig(object):
     def __deepcopy__(self, memo):
         return self.copy()
 
+
+    # for glopart
     def export_json(self, fp):
         import json
         j = {'output_names': self.label_value if self.label_value is not None else self.label_value_cls_names, 'input_names': self.input_names}
@@ -254,7 +256,7 @@ class DataConfig(object):
             for var_name in v:
                 j[k]['max_length'] = self.preprocess_params[var_name]['length']
                 j[k]['min_length'] = None
-                min_length_dict = {'pfcand': 16, 'cpfcandlt': 12, 'npfcand': 8, 'sv': 1}
+                min_length_dict = {'pfcand': 16, 'cpfcandlt': 12, 'npfcand': 8, 'sv': 1, 'scoutpfcand': 16, 'cscoutpfcand': 12, 'nscoutpfcand': 8}
                 for s, min_len in min_length_dict.items():
                     if var_name.startswith(s):
                         j[k]['min_length'] = min_len
@@ -272,3 +274,24 @@ class DataConfig(object):
                 }
         with open(fp, 'w') as f:
             json.dump(j, f, indent=2)
+
+
+    # standard, for leptons
+    # def export_json(self, fp):
+    #     import json
+    #     j = {'output_names': self.label_value, 'input_names': self.input_names}
+    #     for k, v in self.input_dicts.items():
+    #         j[k] = {'var_names': v, 'var_infos': {}}
+    #         for var_name in v:
+    #             j[k]['var_length'] = self.preprocess_params[var_name]['length']
+    #             info = self.preprocess_params[var_name]
+    #             j[k]['var_infos'][var_name] = {
+    #                 'median': 0 if info['center'] is None else info['center'],
+    #                 'norm_factor': info['scale'],
+    #                 'replace_inf_value': 0,
+    #                 'lower_bound': -1e32 if info['center'] is None else info['min'],
+    #                 'upper_bound': 1e32 if info['center'] is None else info['max'],
+    #                 'pad': info['pad_value']
+    #             }
+    #     with open(fp, 'w') as f:
+    #         json.dump(j, f, indent=2)
