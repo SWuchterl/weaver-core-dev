@@ -1,0 +1,20 @@
+Universe                = vanilla
+executable              = run.sh
+arguments               = mlp mlp_pf.py pf_features.yaml /eos/user/y/ykay/WORK/samples 
+output                  = batch/job.$(ClusterId).$(ProcId).out
+error                   = batch/job.$(ClusterId).$(ProcId).err
+log                     = batch/job.$(ClusterId).log
+batch_name              = Interactive_HC_GloParT
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT_OR_EVICT
+transfer_output_files   = output.tar
+transfer_output_remaps  = "output.tar = output.$(ClusterId).$(ProcId).tar"
+getenv = True
+request_GPUs = 1
+request_CPUs = 64
+#request_CPUs = 32
++MaxRuntime = 604800
++AccountingGroup = "group_u_CMST3.all"
+requirements = (regexp("H100",TARGET.GPUs_DeviceName))
++JobFlavour = "nextweek"
+queue
