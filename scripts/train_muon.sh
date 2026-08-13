@@ -40,8 +40,8 @@ ARG="--run-mode train \
 "test:TestLeptonCMSSW/tree.root" \
 --lr-scheduler warmup+cos \
 --optimizer adamW \
---use-amp --auto-clean --compile \
---prefetch-factor 5 \
+--use-amp --compile \
+--prefetch-factor 15 \
 --samples-per-epoch $((150000 * 512 / $NGPUS)) --samples-per-epoch-val $((10000 * 512)) \
 --data-config ${config} \
 --model-prefix model/${PREFIX}/net \
